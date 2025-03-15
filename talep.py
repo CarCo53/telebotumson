@@ -1,26 +1,27 @@
 import telebot
 import sqlite3
 from fuzzywuzzy import fuzz, process
+from datetime import datetime, timedelta
 
-# 📌 Log fonksiyonu (Terminalde süreci izleyelim)
+# 🏷 Log fonksiyonu (Terminalde süreci izleyelim)
 def log(message):
     print(f"[LOG] {message}")
 
-# 📌 Kullanıcı girişlerini kaydetme fonksiyonu
+# 🏷 Kullanıcı girişlerini kaydetme fonksiyonu
 def log_user_input(user_id, input_text):
     print(f"[USER INPUT] UserID: {user_id}, Input: {input_text}")
 
-# 📌 Bot cevaplarını kaydetme fonksiyonu
+# 🏷 Bot cevaplarını kaydetme fonksiyonu
 def log_bot_response(user_id, response_text):
     print(f"[BOT RESPONSE] UserID: {user_id}, Response: {response_text}")
 
-# 📌 Veritabanı bağlantısı oluştur
+# 🏷 Veritabanı bağlantısı oluştur
 def get_db_connection(database_path):
     conn = sqlite3.connect(database_path)
     conn.row_factory = sqlite3.Row
     return conn
 
-# 📌 Kullanıcı kayıt kontrolü
+# 🏷 Kullanıcı kayıt kontrolü
 def get_user_data(user_id, database_path):
     conn = get_db_connection(database_path)
     cursor = conn.cursor()
@@ -29,7 +30,7 @@ def get_user_data(user_id, database_path):
     conn.close()
     return user_data
 
-# 📌 İlgili vakıf çalışanlarını bul
+# 🏷 İlgili vakıf çalışanlarını bul
 def get_relevant_staff(city, district, database_path):
     conn = get_db_connection(database_path)
     cursor = conn.cursor()
@@ -41,7 +42,7 @@ def get_relevant_staff(city, district, database_path):
     conn.close()
     return [dict(row) for row in staff]
 
-# 📌 Özel mesaja geçmeyi dene
+# 🏷 Özel mesaja geçmeyi dene
 def try_send_private_message(bot, user_id, text):
     try:
         bot.send_message(user_id, text)
@@ -50,53 +51,40 @@ def try_send_private_message(bot, user_id, text):
     except:
         return False
 
-# 📌 Bot mesaj gönderme fonksiyonu
+# 🏷 Bot mesaj gönderme fonksiyonu
 def send_message(bot, user_id, text, reply_markup=None):
     bot.send_message(user_id, text, reply_markup=reply_markup)
     log_bot_response(user_id, text)
 
-# 📌 /talep komutu
-def handle_talep(bot, message, database_path):
+# 🏷 /talephane komutu
+def handle_talephane(bot, message, database_path):
+    handle_request(bot, message, "HANE", database_path)
+
+# 🏷 /talepkisi komutu
+def handle_talepkisi(bot, message, database_path):
+    handle_request(bot, message, "KİŞİ", database_path)
+
+# 🏷 Komut işleme fonksiyonu
+def handle_request(bot, message, talep_tipi, database_path):
     user_id = message.from_user.id
     log_user_input(user_id, message.text)
 
     command_parts = message.text.strip().split()
-    if len(command_parts) == 3:
-        talep_tipi = command_parts[1].upper()
-        district_input = command_parts[2].upper()
+    if len(command_parts) == 2:
+        district_input = command_parts[1].upper()
         process_talep(bot, user_id, talep_tipi, district_input, database_path)
     else:
         if not try_send_private_message(bot, user_id, "Talep işlemini başlatıyorum..."):
-            bot.reply_to(message, f"Bu bot ilçeler arası transferleri kolaylaştırmak için yazılmıştır. Telegram uygulaması gereği ilk mesaji sizin göndermeniz gerekmektedir.")
+            bot.reply_to(message, f"Bu bot ilçeler arası transferleri kolaylaştırmak için yazılmıştır.Kullanımı daha iyi anlamak için [bu mesajı](https://t.me/c/1896385779/4/8257) okuyabilir yada [bu videoyu](https://t.me/c/1896385779/4/8227) izleyebilirsiniz.Telegram uygulaması gereği ilk mesaji sizin göndermeniz gerekmektedir. Lütfen özelden yazın: [Bot Linki](t.me/{bot.get_me().username})")
             return
 
         if get_user_data(user_id, database_path) is None:
             send_message(bot, user_id, "Önce kayıt olmalısınız. Lütfen /tani komutunu kullanın.")
             return
 
-        msg = bot.send_message(user_id, "Lütfen talep tipini seçin:", reply_markup=get_talep_tipi_markup())
-        log_bot_response(user_id, "Lütfen talep tipini seçin:")
-        bot.register_next_step_handler(msg, lambda m: validate_talep_type(bot, m, database_path))
-
-def get_talep_tipi_markup():
-    markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    markup.add("HANE", "KİŞİ")
-    return markup
-
-def validate_talep_type(bot, message, database_path):
-    user_id = message.from_user.id
-    talep_tipi = message.text.strip().upper()
-    log_user_input(user_id, message.text)
-
-    if talep_tipi not in ["HANE", "KİŞİ"]:
-        msg = bot.send_message(user_id, "Geçersiz seçim! Lütfen 'HANE' veya 'KİŞİ' seçeneklerinden birini seçin:", reply_markup=get_talep_tipi_markup())
-        log_bot_response(user_id, "Geçersiz seçim! Lütfen 'HANE' veya 'KİŞİ' seçeneklerinden birini seçin:")
-        bot.register_next_step_handler(msg, lambda m: validate_talep_type(bot, m, database_path))
-        return
-
-    msg = bot.send_message(user_id, "Lütfen ilçeyi girin:", reply_markup=telebot.types.ReplyKeyboardRemove())
-    log_bot_response(user_id, "Lütfen ilçeyi girin:")
-    bot.register_next_step_handler(msg, lambda m: process_district(bot, m, talep_tipi, database_path))
+        msg = bot.send_message(user_id, "Lütfen ilçeyi girin:", reply_markup=telebot.types.ReplyKeyboardRemove())
+        log_bot_response(user_id, "Lütfen ilçeyi girin:")
+        bot.register_next_step_handler(msg, lambda m: process_district(bot, m, talep_tipi, database_path))
 
 def process_district(bot, message, talep_tipi, database_path):
     user_id = message.from_user.id
@@ -272,15 +260,32 @@ def finalize_talep_with_city(bot, user_id, district, talep_tipi, city, database_
     else:
         staff_list = "    Vakıf çalışanı bulunamadı"
 
-    bot.send_message(-1002289382837,
-                     f"🚨Transfer Talebi Var! ❗\n\n"
-                     f"    🛎 Talep Eden Vakıf: {user_city} - {user_district}\n"
-                     f"    🏠 Talep Türü: {talep_tipi}\n"
-                     f"    🏫 Talep Edilen Vakıf: {city} - {district}\n\n"
-                     f"    📍 İletişim Bilgileri:\n"
-                     f"    ☎ Telefon: {phone}\n"
-                     f"    📞 IP Telefon: {ip_phone}\n\n"
-                     f"    👩🏻‍💼👨🏻‍💼 İlgili Vakıf Çalışanları:\n"
-                     f"{staff_list}",
-                     parse_mode="HTML", message_thread_id=46)
-    send_message(bot, user_id, "Talebiniz iletildi! ✅", reply_markup=telebot.types.ReplyKeyboardRemove())
+    current_time = datetime.now()
+    if current_time.hour >= 18:
+        scheduled_time = (current_time + timedelta(days=1)).replace(hour=8, minute=0, second=0)
+        response = "Talebiniz mesai başlangıç saatinde iletilecektir."
+        save_request(user_id, talep_tipi, district, city, scheduled_time, response, database_path)
+        send_message(bot, user_id, response, reply_markup=telebot.types.ReplyKeyboardRemove())
+    else:
+        bot.send_message(-1001896385779,
+                         f"🚨Transfer Talebi Var! ❗\n\n"
+                         f"    📞 Talep Eden Vakıf: {user_city} - {user_district}\n"
+                         f"    🏠 Talep Türü: {talep_tipi}\n"
+                         f"    🏢 Talep Edilen Vakıf: {city} - {district}\n\n"
+                         f"    📍 İletişim Bilgileri:\n"
+                         f"    ☎ Telefon: {phone}\n"
+                         f"    📞 IP Telefon: {ip_phone}\n\n"
+                         f"    👩‍💼👨‍💼 İlgili Vakıf Çalışanları:\n"
+                         f"{staff_list}",
+                         parse_mode="HTML", message_thread_id=4)
+        send_message(bot, user_id, "Talebiniz Sydv Plus Grubu Transfer Konusuna iletildi! ✅", reply_markup=telebot.types.ReplyKeyboardRemove())
+
+def save_request(user_id, talep_tipi, district, city, scheduled_time, response, database_path):
+    conn = get_db_connection(database_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO pending_requests (user_id, request_type, district, city, scheduled_time, response)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, talep_tipi, district, city, scheduled_time, response))
+    conn.commit()
+    conn.close()

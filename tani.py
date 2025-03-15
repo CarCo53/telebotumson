@@ -54,7 +54,8 @@ def handle_tani(bot, message, database_path):
 
     # Özel mesaj kontrolü
     if not try_send_private_message(bot, user_id, "Merhaba! Kayıt durumunuzu kontrol ediyorum..."):
-        bot.reply_to(message, f"Lütfen özelden yazın: [Bot Linki](t.me/{bot.get_me().username})", parse_mode="Markdown")
+        bot.reply_to(message, f"Tanımlama işlemi için lütfen [BURAYA](t.me/{bot.get_me().username}) tıklayın. \n\n"
+                     f"Karşınıza çıkacak sayfada BAŞLAT komutu verildikten sonra /tani yazarak tanima işlemini başlatınız. ( Kayıt Sonrası Asistana /talephane ve /talepkisi Komutlarını Verebileceksiniz ) ", parse_mode="Markdown")
         return
 
     # Kullanıcı zaten kayıtlı mı?
@@ -78,8 +79,8 @@ def update_user_data(bot, message, database_path):
         bot.register_next_step_handler(msg, lambda m: ask_district(bot, m, database_path))
     else:
         markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-        markup.add("/talep")  # Kullanıcıya buton olarak /talep sunuluyor
-        send_message(bot, message.chat.id, "Bilgileriniz değiştirilmeyecek. Dilerseniz transfer /talep edebilirsiniz.",
+        markup.add("/talephane")  # Kullanıcıya buton olarak /talep sunuluyor
+        send_message(bot, message.chat.id, "Bilgileriniz değiştirilmeyecek. Dilerseniz transfer /talephane /talepkisi komutlarını kullanabilirsiniz.",
                      reply_markup=markup)
 
 # 📌 İlçeyi sor
@@ -103,7 +104,7 @@ def ask_district(bot, message, database_path):
     for district in districts:
         markup.add(district["District"])
 
-    msg = bot.send_message(user_id, "Lütfen ilçenizi seçin:", reply_markup=markup)
+    msg = bot.send_message(user_id, "Lütfen Çalıştığınız ilçeyi seçin:", reply_markup=markup)
     bot.register_next_step_handler(msg, lambda m: ask_contact_permission(bot, m, plaka_kodu, database_path))
 
 # 📌 Kullanıcıdan iletişime izin iste
@@ -114,7 +115,7 @@ def ask_contact_permission(bot, message, plaka_kodu, database_path):
     markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     markup.add("Evet", "Hayır")
 
-    msg = bot.send_message(user_id, "İletişime geçilmesine izin veriyor musunuz?", reply_markup=markup)
+    msg = bot.send_message(user_id, "Transfer işlemlerinde iletişime geçilmesine izin veriyor musunuz?", reply_markup=markup)
     bot.register_next_step_handler(msg, lambda m: finalize_registration(bot, m, plaka_kodu, selected_district, database_path))
 
 # 📌 Kaydı tamamla
@@ -132,6 +133,6 @@ def finalize_registration(bot, message, plaka_kodu, district, database_path):
     if city_row:
         city = city_row["City"]
         save_user_data(user_id, username, city, district, permission, database_path)
-        send_message(bot, user_id, "Kayıt tamamlandı! Artık /talep komutunu kullanabilirsiniz. ✅")
+        send_message(bot, user_id, "Kayıt tamamlandı! Artık /talephane yada /talepkisi komutlarını kullanabilirsiniz. ✅")
     else:
         send_message(bot, user_id, "İlçe bilgileri bulunamadı. Lütfen tekrar deneyin.")
